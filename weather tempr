@@ -1,0 +1,83 @@
+Create Dataset
+nano input.txt
+19500101 003 45
+19500102 003 50
+19500103 003 -5
+19500104 003 60
+19510101 003 40
+19510102 003 80
+// save and exit
+
+//write program
+nano MaxTemperature.java
+
+import java.io.IOException;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class MaxTemperature {
+
+public static class MaxTempMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+private Text year = new Text();
+private IntWritable temperature = new IntWritable();
+
+@Override
+protected void map(LongWritable key, Text value, Context context)
+throws IOException, InterruptedException {
+String line = value.toString();
+String[] parts = line.split("\\s+");
+if (parts.length == 3) {
+String date = parts[0];
+String tempString = parts[2];
+try {
+String yr = date.substring(0, 4); // extract year
+int temp = Integer.parseInt(tempString);
+year.set(yr);
+temperature.set(temp);
+context.write(year, temperature);
+} catch (Exception e) {
+// Ignore malformed lines or parse errors
+}
+}
+}
+}
+
+public static class MaxTempReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+private IntWritable maxTemp = new IntWritable();
+
+@Override
+protected void reduce(Text key, Iterable<IntWritable> values, Context context)
+throws IOException, InterruptedException {
+int max = Integer.MIN_VALUE;
+for (IntWritable val : values) {
+max = Math.max(max, val.get());
+}
+maxTemp.set(max);
+context.write(key, maxTemp);
+}
+}
+
+public static void main(String[] args) throws Exception {
+Configuration conf = new Configuration();
+Job job = Job.getInstance(conf, "max temperature");
+job.setJarByClass(MaxTemperature.class);
+job.setMapperClass(MaxTempMapper.class);
+job.setReducerClass(MaxTempReducer.class);
+job.setOutputKeyClass(Text.class);
+job.setOutputValueClass(IntWritable.class);
+
+FileInputFormat.addInputPath(job, new Path(args[0]));
+FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+System.exit(job.waitForCompletion(true) ? 0 : 1);
+}
+}
